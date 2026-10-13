@@ -47,6 +47,14 @@ public class ServicioUbicacion extends Service implements LocationListener {
     static volatile String chofer = "";
     static volatile String ruta = "";
     static volatile long contactoWeb = 0;
+    /** Día (Ecuador) de la ruta que se está siguiendo: al cambiar el día con la app oculta, se apaga solo. */
+    static volatile String dia = "";
+
+    static String diaEcuador() {
+        java.text.SimpleDateFormat f = new java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US);
+        f.setTimeZone(java.util.TimeZone.getTimeZone("America/Guayaquil"));
+        return f.format(new java.util.Date());
+    }
 
     private HandlerThread hilo;
     private Handler h;
@@ -60,6 +68,13 @@ public class ServicioUbicacion extends Service implements LocationListener {
         @Override
         public void run() {
             if (System.currentTimeMillis() - contactoWeb > SIN_WEB_MAX) {
+                detenerTodo();
+                return;
+            }
+            // Terminó el día: la ruta que quedó sin terminar se cierra sola en el servidor y el GPS ya no es
+            // obligatorio (si la app está a la vista, decide la página)
+            if (!MainActivity.visible && !dia.isEmpty() && !dia.equals(diaEcuador())) {
+                enviar();
                 detenerTodo();
                 return;
             }
@@ -104,6 +119,7 @@ public class ServicioUbicacion extends Service implements LocationListener {
             ruta = sp.getString("rastreo_ruta", "");
         }
         contactoWeb = System.currentTimeMillis();
+        dia = diaEcuador();
         if (chofer == null || chofer.isEmpty() || !MainActivity.tienePermisoUbicacion(this)) {
             stopSelf();
             return START_NOT_STICKY;

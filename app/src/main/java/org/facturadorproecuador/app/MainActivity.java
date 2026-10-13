@@ -16,6 +16,9 @@ import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.Color;
+import android.net.ConnectivityManager;
+import android.net.Network;
+import android.net.NetworkCapabilities;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
@@ -70,6 +73,8 @@ public class MainActivity extends Activity {
     private static final int ELEGIR_ARCHIVO = 3;
 
     WebView web;
+    /** Página abierta (la lee el puente para no darle la contraseña guardada a otra página). */
+    volatile String urlActual = "";
     private View sinConexion;
     private Actualizador actualizador;
 
@@ -81,6 +86,9 @@ public class MainActivity extends Activity {
 
     private final Set<Long> misDescargas = new HashSet<>();
     private BroadcastReceiver receptorDescargas;
+    private ConnectivityManager.NetworkCallback vigiaRed;
+    /** Sin internet se usa la última versión guardada de la pantalla (y la página trabaja con lo del teléfono). */
+    private boolean usandoGuardado = false;
 
     @Override
     protected void onCreate(Bundle estado) {
@@ -95,6 +103,7 @@ public class MainActivity extends Activity {
         setContentView(raiz);
 
         configurarWeb();
+        vigilarRed();
         if (estado == null || web.restoreState(estado) == null) {
             web.loadUrl(BuildConfig.SITIO + BuildConfig.INICIO);
         }
@@ -145,6 +154,54 @@ public class MainActivity extends Activity {
         web.setDownloadListener((url, agente, disposicion, tipo, largo) -> descargar(url, agente, disposicion, tipo));
     }
 
+    // ── Sin internet: la pantalla guardada; al volver la señal, todo normal (la página envía lo pendiente) ──
+    private boolean hayInternet() {
+        try {
+            ConnectivityManager cm = (ConnectivityManager) getSystemService(CONNECTIVITY_SERVICE);
+            NetworkCapabilities nc = cm.getNetworkCapabilities(cm.getActiveNetwork());
+            return nc != null && nc.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET);
+        } catch (Exception e) {
+            return true;
+        }
+    }
+
+    private void vigilarRed() {
+        if (!hayInternet()) {
+            usandoGuardado = true;
+            web.getSettings().setCacheMode(WebSettings.LOAD_CACHE_ELSE_NETWORK);
+        }
+        try {
+            ConnectivityManager cm = (ConnectivityManager) getSystemService(CONNECTIVITY_SERVICE);
+            vigiaRed = new ConnectivityManager.NetworkCallback() {
+                @Override
+                public void onAvailable(Network n) {
+                    runOnUiThread(() -> {
+                        web.getSettings().setCacheMode(WebSettings.LOAD_DEFAULT);
+                        if (usandoGuardado) {
+                            usandoGuardado = false;
+                            if (sinConexion.getVisibility() == View.VISIBLE) {
+                                sinConexion.setVisibility(View.GONE);
+                                web.reload();
+                            }
+                        }
+                    });
+                }
+
+                @Override
+                public void onLost(Network n) {
+                    runOnUiThread(() -> {
+                        if (!hayInternet()) {
+                            usandoGuardado = true;
+                            web.getSettings().setCacheMode(WebSettings.LOAD_CACHE_ELSE_NETWORK);
+                        }
+                    });
+                }
+            };
+            cm.registerDefaultNetworkCallback(vigiaRed);
+        } catch (Exception ignorado) {
+        }
+    }
+
     // ── Navegación: lo de FacturaPro se queda en la app; Maps, Waze, WhatsApp, llamadas… se abren en su app ──
 
     static boolean esNuestro(Uri u) {
@@ -169,14 +226,28 @@ public class MainActivity extends Activity {
         }
 
         @Override
+        public void onPageStarted(WebView v, String url, Bitmap icono) {
+            urlActual = url == null ? "" : url;
+        }
+
+        @Override
         public void onPageFinished(WebView v, String url) {
+            urlActual = url == null ? "" : url;
             CookieManager.getInstance().flush();
             Puntos.guardarCookie(MainActivity.this, CookieManager.getInstance().getCookie(BuildConfig.SITIO));
         }
 
         @Override
         public void onReceivedError(WebView v, WebResourceRequest r, WebResourceError e) {
-            if (r.isForMainFrame()) sinConexion.setVisibility(View.VISIBLE);
+            if (!r.isForMainFrame()) return;
+            if (!usandoGuardado) {
+                // Sin señal: se abre la última versión guardada de la pantalla
+                usandoGuardado = true;
+                v.getSettings().setCacheMode(WebSettings.LOAD_CACHE_ONLY);
+                v.reload();
+                return;
+            }
+            sinConexion.setVisibility(View.VISIBLE);
         }
 
         @Override
@@ -481,6 +552,7 @@ public class MainActivity extends Activity {
             if (!tienePermisoUbicacion(this) || chofer == null || chofer.isEmpty()) return;
             if (ServicioUbicacion.activo && chofer.equals(ServicioUbicacion.chofer) && ruta.equals(ServicioUbicacion.ruta)) {
                 ServicioUbicacion.contactoWeb = System.currentTimeMillis();
+                ServicioUbicacion.dia = ServicioUbicacion.diaEcuador();
                 return;
             }
             Intent i = new Intent(this, ServicioUbicacion.class).putExtra("chofer", chofer).putExtra("ruta", ruta);
@@ -573,6 +645,10 @@ public class MainActivity extends Activity {
     protected void onDestroy() {
         try {
             unregisterReceiver(receptorDescargas);
+        } catch (Exception ignorado) {
+        }
+        try {
+            if (vigiaRed != null) ((ConnectivityManager) getSystemService(CONNECTIVITY_SERVICE)).unregisterNetworkCallback(vigiaRed);
         } catch (Exception ignorado) {
         }
         super.onDestroy();

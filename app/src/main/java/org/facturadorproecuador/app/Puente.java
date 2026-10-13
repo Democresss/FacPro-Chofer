@@ -45,6 +45,38 @@ public class Puente {
         app.runOnUiThread(() -> app.abrirAjustesUbicacion(permiso));
     }
 
+    // ── Correo y contraseña guardados en el teléfono (cifrados): solo para las páginas de FacturaPro ──
+    private boolean paginaNuestra() {
+        String u = app.urlActual;
+        return u != null && MainActivity.esNuestro(android.net.Uri.parse(u));
+    }
+
+    @JavascriptInterface
+    public String acceso() {
+        return paginaNuestra() ? Boveda.leer(app) : "";
+    }
+
+    @JavascriptInterface
+    public void guardarAcceso(String usuario, String clave) {
+        if (paginaNuestra()) Boveda.guardar(app, usuario, clave);
+    }
+
+    @JavascriptInterface
+    public void borrarAcceso() {
+        Boveda.borrar(app);
+    }
+
+    /** Cerró sesión a mano: la próxima vez no entra sola. */
+    @JavascriptInterface
+    public void marcarSalida() {
+        Boveda.marcarSalida(app);
+    }
+
+    @JavascriptInterface
+    public boolean salio() {
+        return Boveda.salio(app);
+    }
+
     @JavascriptInterface
     public void guardarArchivo(String dataUrl, String nombre) {
         app.guardarArchivo(dataUrl, nombre);
