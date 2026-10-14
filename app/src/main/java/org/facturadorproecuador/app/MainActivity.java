@@ -123,6 +123,9 @@ public class MainActivity extends Activity {
             requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS}, PERMISO_NOTIFICACIONES);
         }
 
+        // Recién actualizada: se avisa la versión nueva (así se sabe que quedó)
+        avisarSiSeActualizo();
+
         // Busca actualizaciones apenas se abre
         actualizador = new Actualizador(this);
         actualizador.revisar(true);
@@ -689,6 +692,17 @@ public class MainActivity extends Activity {
         l.addView(d);
         l.addView(b);
         return l;
+    }
+
+    private void avisarSiSeActualizo() {
+        SharedPreferences sp = getSharedPreferences("app", MODE_PRIVATE);
+        String antes = sp.getString("version_vista", "");
+        if (!BuildConfig.VERSION_NAME.equals(antes)) {
+            if (!antes.isEmpty()) {
+                aviso(getString(R.string.app_name) + " actualizada a la versión " + BuildConfig.VERSION_NAME);
+            }
+            sp.edit().putString("version_vista", BuildConfig.VERSION_NAME).apply();
+        }
     }
 
     void aviso(String texto) {

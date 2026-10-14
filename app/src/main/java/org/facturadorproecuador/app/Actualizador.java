@@ -22,7 +22,7 @@ import java.net.HttpURLConnection;
 import java.net.URL;
 
 /**
- * Se actualiza sola: al abrirse (y al volver, cada hora) mira la última versión publicada en GitHub; si hay una
+ * Se actualiza sola: al abrirse (y al volver, cada 10 min) mira la última versión publicada en GitHub; si hay una
  * nueva la descarga y abre el instalador. Las pantallas no necesitan esto (vienen de la web); esto es para la parte
  * nativa (GPS, cámara, descargas).
  */
@@ -40,7 +40,8 @@ class Actualizador {
 
     void revisar(boolean ahora) {
         if (enCurso) return;
-        if (!ahora && System.currentTimeMillis() - ultimaRevision < 3600_000) return;
+        // Al abrirse siempre; al volver a la app, si pasaron más de 10 min
+        if (!ahora && System.currentTimeMillis() - ultimaRevision < 600_000) return;
         ultimaRevision = System.currentTimeMillis();
         enCurso = true;
         new Thread(() -> {
