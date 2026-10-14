@@ -6,6 +6,7 @@
     <!-- Se actualiza sola: descarga la versión nueva y abre el instalador -->
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.VIBRATE" />
 
     <!-- GPS de la ruta, también con la pantalla apagada (servicio en primer plano con aviso fijo) -->
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
